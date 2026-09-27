@@ -4,81 +4,174 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
     <title>TizenCast</title>
-    <script src="$WEBAPIS/webapis/webapis.js"></script>
-    <script src="fcast-receiver-sdk.js"></script>
-    <script src="main.js"></script>
     <style>
-        :root {
-            --accent-color: #3498db;
-            --bg-gradient: radial-gradient(circle at center, #1a1a2e 0%, #020205 100%);
-        }
-        body, html {
+        /* Sized in vh so the layout holds whatever CSS resolution the TV reports.
+           No CSS variables or flex `gap`: Tizen 3 ships Chromium 47. */
+        html, body {
             margin: 0; padding: 0;
             width: 100%; height: 100%;
             background: #000; color: #fff;
             font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             overflow: hidden;
         }
+
+        /* Idle screen */
         #idle-screen {
-            display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            height: 100vh; background: var(--bg-gradient);
-            transition: opacity 1s ease; z-index: 5;
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            display: flex; align-items: center; justify-content: center;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #020205 100%);
+        }
+        #intro {
+            display: flex; flex-direction: column; align-items: center;
+            width: 46vw; text-align: center;
         }
         #cast-logo {
-            width: 180px; filter: drop-shadow(0 0 30px rgba(52, 152, 219, 0.4));
-            animation: pulse 4s infinite ease-in-out; margin-bottom: 30px;
+            width: 18vh; height: 18vh; margin-bottom: 3vh;
+            animation: pulse 4s infinite ease-in-out;
         }
         @keyframes pulse {
             0%, 100% { transform: scale(1); opacity: 0.8; }
             50% { transform: scale(1.05); opacity: 1; }
         }
+        #title { font-size: 7vh; font-weight: 600; letter-spacing: 0.3vh; }
+        #device-name { font-size: 2.6vh; color: rgba(255, 255, 255, 0.6); margin-top: 1vh; }
         #status {
-            font-size: 2rem; font-weight: 300; letter-spacing: 2px;
-            text-transform: uppercase; margin-bottom: 10px;
-            background: linear-gradient(to right, #fff, var(--accent-color));
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            display: flex; align-items: center;
+            margin-top: 5vh; font-size: 3.4vh; font-weight: 300;
         }
-        #ip-info { font-size: 1.1rem; color: rgba(255, 255, 255, 0.5); font-weight: 300; }
+        #status-indicator {
+            width: 2.6vh; height: 2.6vh; margin-right: 1.6vh; border-radius: 50%;
+            border: 0.4vh solid rgba(52, 152, 219, 0.3); border-top-color: #3498db;
+            animation: spin 1s linear infinite;
+        }
+        #status.connected #status-indicator {
+            border: none; background: #2ecc71; animation: none;
+        }
+        #status.error #status-indicator {
+            border: none; background: #e74c3c; animation: none;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        #status-hint { margin-top: 2vh; font-size: 2.2vh; color: rgba(255, 255, 255, 0.55); min-height: 3vh; }
+
+        #connection-card {
+            width: 32vw; margin-left: 6vw; padding: 4vh 3vw;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 2vh;
+            font-size: 2.4vh; line-height: 1.5;
+        }
+        .card-title { font-size: 2.8vh; font-weight: 600; margin-bottom: 2vh; }
+        .label { color: rgba(255, 255, 255, 0.5); font-size: 2vh; margin-top: 1.6vh; }
+        #addresses div { font-family: monospace; font-size: 2.8vh; }
+        #discovery { margin-top: 2vh; font-size: 2vh; color: rgba(255, 255, 255, 0.6); }
+        #qr-box { margin-top: 2.5vh; text-align: center; }
+        #qr-code {
+            display: inline-block; width: 24vh; height: 24vh;
+            background: #fff; border-radius: 1vh; padding: 1vh;
+        }
+        #qr-code svg { width: 100%; height: 100%; display: block; }
+        #qr-caption { font-size: 2vh; color: rgba(255, 255, 255, 0.6); margin-top: 1vh; }
+
+        /* Player */
         #player {
-            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: #000; display: none; z-index: 10;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: #000; display: none;
         }
+        #video { width: 100%; height: 100%; background: #000; display: block; }
         body.casting #idle-screen { display: none; }
         body.casting #player { display: block; }
+
+        #buffering {
+            position: absolute; top: 50%; left: 50%;
+            width: 8vh; height: 8vh; margin: -4vh 0 0 -4vh;
+            border-radius: 50%; border: 0.8vh solid rgba(255, 255, 255, 0.2); border-top-color: #fff;
+            animation: spin 1s linear infinite; display: none;
+        }
+        body.casting.buffering #buffering { display: block; }
+
+        #osd {
+            position: absolute; left: 0; right: 0; bottom: 0;
+            padding: 8vh 5vw 5vh;
+            background: linear-gradient(to top, rgba(0, 0, 0, 0.85), rgba(0, 0, 0, 0));
+            opacity: 0; transition: opacity 0.4s ease;
+            display: none;
+        }
+        body.casting #osd { display: block; }
+        #osd.visible { opacity: 1; }
+        #osd-row { display: flex; align-items: center; margin-bottom: 2vh; }
+        #osd-state { width: 4vh; height: 4vh; margin-right: 2vh; position: relative; }
+        #osd-state.playing:before, #osd-state.playing:after {
+            content: ''; position: absolute; top: 0; width: 1.3vh; height: 4vh; background: #fff;
+        }
+        #osd-state.playing:before { left: 0.4vh; }
+        #osd-state.playing:after { right: 0.4vh; }
+        #osd-state.paused:before {
+            content: ''; position: absolute; top: 0; left: 0.6vh;
+            border-style: solid; border-color: transparent transparent transparent #fff;
+            border-width: 2vh 0 2vh 3.4vh;
+        }
+        #osd-time { font-size: 3vh; font-variant-numeric: tabular-nums; }
+        #osd-live {
+            margin-left: 2vh; padding: 0.3vh 1.2vh; border-radius: 0.6vh;
+            background: #e74c3c; font-size: 2vh; font-weight: 600; display: none;
+        }
+        #osd.live #osd-live { display: inline-block; }
+        #osd-bar {
+            position: relative; height: 0.8vh; border-radius: 0.4vh;
+            background: rgba(255, 255, 255, 0.25); overflow: hidden;
+        }
+        #osd-buffer, #osd-progress { position: absolute; top: 0; left: 0; bottom: 0; width: 0; }
+        #osd-buffer { background: rgba(255, 255, 255, 0.35); }
+        #osd-progress { background: #3498db; }
+
+        /* Toasts */
+        #toasts { position: absolute; top: 4vh; right: 3vw; width: 36vw; }
+        .toast {
+            margin-bottom: 1.5vh; padding: 1.6vh 2vw; border-radius: 1vh;
+            background: rgba(20, 20, 30, 0.92); border-left: 0.6vh solid #3498db;
+            font-size: 2.3vh; transition: opacity 0.5s ease;
+        }
+        .toast.error { border-left-color: #e74c3c; }
+        .toast.hide { opacity: 0; }
     </style>
 </head>
 <body>
     <div id="idle-screen">
-        <img src="../icon.png" id="cast-logo" alt="TizenCast Logo">
-        <div id="status">Ready to Cast</div>
-        <div id="ip-info">Fetching Network Info...</div>
+        <div id="intro">
+            <img src="../icon.png" id="cast-logo" alt="">
+            <div id="title">TizenCast</div>
+            <div id="device-name"></div>
+            <div id="status"><div id="status-indicator"></div><span id="status-text">Starting TizenCast service&hellip;</span></div>
+            <div id="status-hint"></div>
+        </div>
+        <div id="connection-card">
+            <div class="card-title">Manual connection</div>
+            <div class="label">IP address</div>
+            <div id="addresses"><div>&hellip;</div></div>
+            <div class="label">Ports</div>
+            <div id="ports">46899 (TCP), 46898 (WebSocket)</div>
+            <div id="discovery"></div>
+            <div id="qr-box" style="display: none">
+                <div id="qr-code"></div>
+                <div id="qr-caption">Scan with an FCast sender app such as Grayjay</div>
+            </div>
+        </div>
     </div>
-    <video id="player" crossorigin="anonymous"></video>
-    <script>
-        const video = document.getElementById('player');
-        const body = document.body;
 
-        window.addEventListener('fcast-stream-start', (e) => {
-            body.classList.add('casting');
-            if (e.detail && e.detail.url) {
-                video.src = e.detail.url;
-                video.play();
-            }
-        });
+    <div id="player">
+        <video id="video" autoplay preload="auto"></video>
+        <div id="buffering"></div>
+        <div id="osd">
+            <div id="osd-row">
+                <div id="osd-state" class="paused"></div>
+                <div id="osd-time">00:00 / 00:00</div>
+                <div id="osd-live">LIVE</div>
+            </div>
+            <div id="osd-bar"><div id="osd-buffer"></div><div id="osd-progress"></div></div>
+        </div>
+    </div>
 
-        window.addEventListener('fcast-stream-stop', () => {
-            body.classList.remove('casting');
-            video.pause();
-            video.src = "";
-        });
+    <div id="toasts"></div>
 
-        window.addEventListener('keydown', function(e) {
-            if (e.keyCode === 10009 && body.classList.contains('casting')) {
-                if (window.fcast) window.fcast.stop();
-                e.preventDefault();
-            }
-        });
-    </script>
+    <script src="main.js"></script>
 </body>
 </html>
