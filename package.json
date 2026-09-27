@@ -1,15 +1,24 @@
 {
+  "name": "tizencast",
+  "version": "0.7.0",
+  "description": "FCast receiver for Samsung Tizen TVs. Cast videos from Grayjay and other FCast sender apps.",
   "packageType": "app",
   "appName": "TizenCast",
-  "author": "ice_fly",
-  "version": "0.6",
   "appPath": "app/cast.html",
-  "serviceFile": "app/service.js", 
+  "serviceFile": "app/service.js",
   "icon": "icon.png",
-  "evaluateScriptOnDocumentStart": false,
   "keys": [
-    "MediaPlay", "MediaPause", "MediaStop", "MediaRewind", "MediaFastForward",
-    "VolumeUp", "VolumeDown", "VolumeMute",
-    "Return", "Exit"
-  ]
+    "MediaPlayPause",
+    "MediaPlay",
+    "MediaPause",
+    "MediaStop",
+    "MediaFastForward",
+    "MediaRewind"
+  ],
+  "author": "ice_fly",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/BlindeCode/TizenCast"
+  }
 }
